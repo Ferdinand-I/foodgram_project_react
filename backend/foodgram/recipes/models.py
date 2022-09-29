@@ -35,6 +35,7 @@ class Tag(models.Model):
     )
     color = models.CharField(
         max_length=16,
+        verbose_name='Цвет',
         unique=True
     )
     slug = models.SlugField(
@@ -71,11 +72,13 @@ class Recipe(models.Model):
     )
     ingredients = models.ManyToManyField(
         Ingredient,
-        through='IngredientRecipe'
+        through='IngredientRecipe',
+        verbose_name='Ингредиенты'
     )
     tags = models.ManyToManyField(
         Tag,
-        through='TagRecipe'
+        through='TagRecipe',
+        verbose_name='Тэги'
     )
     cooking_time = models.PositiveSmallIntegerField(
         verbose_name='Время приготовления'
