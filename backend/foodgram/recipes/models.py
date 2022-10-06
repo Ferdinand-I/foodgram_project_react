@@ -1,6 +1,6 @@
 from django.db import models
+
 from users.models import User
-from django.utils.timezone import now
 
 
 class Ingredient(models.Model):
@@ -81,6 +81,15 @@ class Recipe(models.Model):
     created = models.DateTimeField(
         verbose_name='Дата и время создания',
         auto_now_add=True
+    )
+    shopping_users = models.ManyToManyField(
+        User,
+        verbose_name='Пользователи, которые добавили рецепт в корзину'
+    )
+    favorited_users = models.ManyToManyField(
+        User,
+        verbose_name='Пользователи, которые добавили рецепт в избранное',
+        related_name='favorited'
     )
 
     class Meta:

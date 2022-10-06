@@ -19,21 +19,12 @@ class TagSerializer(serializers.ModelSerializer):
 
 class IngredientSerializer(serializers.ModelSerializer):
 
-    amount = serializers.IntegerField(
-        source='ingredient'
-    )
-
     class Meta:
         model = Ingredient
         fields = [
             'id',
             'name',
             'measure',
-            'amount'
-        ]
-        read_only_fields = [
-            'name',
-            'measure'
         ]
 
 
@@ -47,7 +38,16 @@ class UserSerializer(serializers.ModelSerializer):
             'username',
             'first_name',
             'last_name',
+            'password'
         ]
+        read_only_fields = ['id', ]
+        extra_kwargs = {
+            'password': {'write_only': True},
+        }
+
+    def create(self, validated_data):
+        user = User.objects.create_user(**validated_data)
+        return user
 
 
 class IngredientRecipeSerializer(serializers.ModelSerializer):
@@ -57,7 +57,7 @@ class IngredientRecipeSerializer(serializers.ModelSerializer):
         write_only=True
     )
     name = serializers.CharField(source='ingredient', read_only=True)
-    measure = serializers.CharField(
+    measurement_unit = serializers.CharField(
         source='ingredient.measure', read_only=True
     )
 
@@ -67,7 +67,7 @@ class IngredientRecipeSerializer(serializers.ModelSerializer):
             'id_ingredient',
             'id',
             'name',
-            'measure',
+            'measurement_unit',
             'amount'
         ]
 
@@ -81,8 +81,13 @@ class RecipeSerializer(serializers.ModelSerializer):
         read_only=True,
         default=serializers.CurrentUserDefault()
     )
-    is_in_shopping_cart = serializers.BooleanField(
-        read_only=True, default=False
+    is_favorited = serializers.SerializerMethodField(
+        read_only=True,
+        required=False
+    )
+    is_in_shopping_cart = serializers.SerializerMethodField(
+        read_only=True,
+        required=False
     )
     name = serializers.CharField()
     image = Base64ImageField()
@@ -97,9 +102,10 @@ class RecipeSerializer(serializers.ModelSerializer):
             'id',
             'tags',
             'author',
-            "is_in_shopping_cart",
-            'name',
             'ingredients',
+            'is_favorited',
+            'is_in_shopping_cart',
+            'name',
             'image',
             'text',
             'cooking_time'
@@ -149,3 +155,14 @@ class RecipeSerializer(serializers.ModelSerializer):
         ret['tags'] = new_tag_representation
         return ret
 
+    def get_is_in_shopping_cart(self, obj):
+        if self.context:
+            user = self.context['request'].user
+            return user in obj.shopping_users.all()
+        return
+
+    def get_is_favorited(self, obj):
+        if self.context:
+            user = self.context['request'].user
+            return user in obj.favorited_users.all()
+        return

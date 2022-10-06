@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .views import IngredientViewSet, RecipeViewSet, TagViewSet
+from .views import IngredientViewSet, RecipeViewSet, TagViewSet, UserViewSet
 
 router = SimpleRouter()
 
@@ -14,10 +14,13 @@ router.register(
 router.register(
     r'tags', TagViewSet, basename='tags'
 )
+router.register(
+    r'users', UserViewSet, basename='users'
+)
 
 authpatterns = [
     path('', include('djoser.urls')),
-    path('', include('djoser.urls.authtoken'))
+    path('auth/', include('djoser.urls.authtoken'))
 ]
 
 urlpatterns = [
