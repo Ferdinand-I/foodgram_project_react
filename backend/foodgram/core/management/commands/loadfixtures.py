@@ -10,7 +10,9 @@ CSV_ROOT = settings.BASE_DIR / 'data'
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
-        with open(str(CSV_ROOT) + '/ingredients.csv', encoding='utf-8') as csvfile:
+        with open(
+                str(CSV_ROOT) + '/ingredients.csv', encoding='utf-8'
+        ) as csvfile:
             user = csv.reader(csvfile)
             for row in user:
                 Ingredient.objects.get_or_create(
