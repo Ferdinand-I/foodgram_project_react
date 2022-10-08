@@ -1,6 +1,6 @@
 from django.contrib.auth.models import AbstractUser
-from django.db import models
 from django.core import validators
+from django.db import models
 
 
 class User(AbstractUser):
@@ -15,6 +15,11 @@ class User(AbstractUser):
     first_name = models.CharField(max_length=150, null=False)
     last_name = models.CharField(max_length=150, null=False)
     password = models.CharField(max_length=150, null=False)
+    subscriptions = models.ManyToManyField(
+        to='self',
+        related_name='subscribers',
+        symmetrical=False
+    )
 
     class Meta:
         verbose_name = 'Пользователь'

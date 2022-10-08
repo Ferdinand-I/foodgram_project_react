@@ -1,8 +1,48 @@
 from rest_framework import serializers
-
+from django.shortcuts import get_object_or_404
 from core.fields import Base64ImageField
-from recipes.models import Ingredient, Recipe, Tag, TagRecipe, IngredientRecipe
+from recipes.models import Ingredient, IngredientRecipe, Recipe, Tag, TagRecipe
 from users.models import User
+
+
+class RecipeSmallReadOnlySerialiazer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Recipe
+        fields = [
+            'id',
+            'name',
+            'image',
+            'cooking_time'
+        ]
+        read_only_fields = [
+            'id',
+            'name',
+            'image',
+            'cooking_time'
+        ]
+
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    recipes = RecipeSmallReadOnlySerialiazer(many=True)
+    recipes_count = serializers.SerializerMethodField()
+    is_subscribed = serializers.BooleanField(default=True)
+
+    class Meta:
+        model = User
+        fields = [
+            'email',
+            'id',
+            'username',
+            'first_name',
+            'last_name',
+            'is_subscribed',
+            'recipes',
+            'recipes_count',
+        ]
+
+    def get_recipes_count(self, obj: User):
+        return len(obj.recipes.all())
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -30,6 +70,10 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
 
+    is_subscribed = serializers.SerializerMethodField(
+        read_only=True,
+    )
+
     class Meta:
         model = User
         fields = [
@@ -38,12 +82,19 @@ class UserSerializer(serializers.ModelSerializer):
             'username',
             'first_name',
             'last_name',
-            'password'
+            'password',
+            'is_subscribed'
         ]
         read_only_fields = ['id', ]
         extra_kwargs = {
             'password': {'write_only': True},
         }
+
+    def get_is_subscribed(self, obj):
+        if self.context:
+            user = self.context['request'].user
+            return user in obj.subscribers.all()
+        return
 
     def create(self, validated_data):
         user = User.objects.create_user(**validated_data)
@@ -52,7 +103,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 class IngredientRecipeSerializer(serializers.ModelSerializer):
 
-    id_ingredient = serializers.IntegerField(
+    id = serializers.IntegerField(
         source='ingredient.pk',
         write_only=True
     )
@@ -64,7 +115,7 @@ class IngredientRecipeSerializer(serializers.ModelSerializer):
     class Meta:
         model = IngredientRecipe
         fields = [
-            'id_ingredient',
+            'pk',
             'id',
             'name',
             'measurement_unit',
@@ -89,7 +140,6 @@ class RecipeSerializer(serializers.ModelSerializer):
         read_only=True,
         required=False
     )
-    name = serializers.CharField()
     image = Base64ImageField()
     ingredients = IngredientRecipeSerializer(
         source='ingredientrecipe_set',
@@ -144,6 +194,27 @@ class RecipeSerializer(serializers.ModelSerializer):
                 recipe=recipe
             )
         return recipe
+
+    def update(self, instance: Recipe, validated_data):
+        ingredients_set = validated_data['ingredientrecipe_set']
+        data_ingredients = [
+            [get_object_or_404(Ingredient, pk=i['ingredient']['pk']),
+             i['amount']]
+            for i in ingredients_set]
+        instance.name = validated_data['name']
+        instance.image = validated_data['image']
+        instance.text = validated_data['text']
+        instance.cooking_time = self.initial_data['cooking_time']
+        IngredientRecipe.objects.filter(recipe=instance).delete()
+        TagRecipe.objects.filter(recipe=instance).delete()
+        for i in data_ingredients:
+            IngredientRecipe.objects.create(
+                recipe=instance, ingredient=i[0], amount=i[1]
+            )
+        for i in validated_data['tags']:
+            TagRecipe.objects.create(recipe=instance, tag=i)
+        instance.save()
+        return instance
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
