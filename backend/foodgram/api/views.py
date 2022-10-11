@@ -1,14 +1,14 @@
 import io
 
 from django.contrib.auth.hashers import check_password
+from django.db.models import Sum
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from reportlab.pdfgen import canvas
 from rest_framework import filters
 from rest_framework.decorators import action
-from rest_framework.permissions import (IsAuthenticatedOrReadOnly,
-                                        IsAuthenticated, AllowAny)
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.status import (HTTP_400_BAD_REQUEST, HTTP_204_NO_CONTENT,
                                    HTTP_201_CREATED)
@@ -17,24 +17,18 @@ from rest_framework.viewsets import ModelViewSet
 from recipes.models import Recipe, Ingredient, Tag
 from users.models import User
 from .filters import RecipeFilter
-from .permissions import IsAuthor
+from .permissions import CustomRecipePermissions, CustomUserPermissions
 from .serializers import (RecipeSerializer, IngredientSerializer,
                           TagSerializer, UserSerializer,
                           SubscriptionSerializer,
                           RecipeSmallReadOnlySerialiazer)
+from django.http import HttpResponse
 
 
 class UserViewSet(ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = []
-
-    def get_permissions(self):
-        if len(self.request.path.split('/')) != 5:
-            permission_classes = [AllowAny, ]
-        else:
-            permission_classes = [IsAuthenticated, ]
-        return [permission() for permission in permission_classes]
+    permission_classes = [IsAdminUser, CustomUserPermissions, ]
 
     def get_current_user(self) -> User:
         return self.request.user
@@ -42,7 +36,6 @@ class UserViewSet(ModelViewSet):
     @action(
         detail=False,
         methods=['get', ],
-        permission_classes=[IsAuthenticated, ],
     )
     def me(self, *args, **kwargs):
         current_user = self.request.user
@@ -139,7 +132,7 @@ class UserViewSet(ModelViewSet):
 class RecipeViewSet(ModelViewSet):
     queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly, IsAuthor, ]
+    permission_classes = [IsAdminUser, CustomRecipePermissions, ]
     filter_backends = [DjangoFilterBackend, ]
     filterset_class = RecipeFilter
     http_method_names = ['get', 'post', 'patch', 'delete', ]
@@ -194,15 +187,26 @@ class RecipeViewSet(ModelViewSet):
         methods=['get', ]
     )
     def download_shopping_cart(self, *args, **kwargs):
-        buffer = io.BytesIO()
-        pdf = canvas.Canvas(buffer)
-        textobject = pdf.beginText(10, 10)
-        textobject.setTextOrigin(10, 10)
-
-        pdf.showPage()
-        pdf.save()
-        buffer.seek(0)
-        return FileResponse(buffer, as_attachment=True, filename='hello.pdf')
+        queryset = (Recipe.objects.filter(
+            shopping_users=self.request.user).values(
+            'ingredients__measure', 'ingredients__name').annotate(
+            all_amount=Sum('ingredientrecipe__amount')
+        ))
+        response = HttpResponse(content_type='text/plain')
+        response['Content-Disposition'] = ('attachment;'
+                                           'filename="shopping_list.txt"')
+        data = '\n'.join([
+            ' '.join(
+                [
+                    str(ingredient['ingredients__name']),
+                    str(ingredient['all_amount']),
+                    str(ingredient['ingredients__measure']),
+                ]
+            )
+            for ingredient in queryset
+        ])
+        response.write(data)
+        return response
 
     @action(
         detail=True,
@@ -241,6 +245,7 @@ class IngredientViewSet(ModelViewSet):
     serializer_class = IngredientSerializer
     filter_backends = [filters.SearchFilter, ]
     search_fields = ['^name', ]
+    http_method_names = ['get', ]
 
 
 class TagViewSet(ModelViewSet):

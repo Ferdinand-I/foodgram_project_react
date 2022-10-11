@@ -121,6 +121,21 @@ class IngredientRecipeSerializer(serializers.ModelSerializer):
             'measurement_unit',
             'amount'
         ]
+        extra_kwargs = {
+            'amount': {'required': True}
+        }
+
+    def validate(self, attrs):
+        amount = attrs.get('amount')
+        if not amount:
+            raise serializers.ValidationError(
+                'Amount value must be define.'
+            )
+        if amount < 1:
+            raise serializers.ValidationError(
+                'Amount value must be greate than zero.'
+            )
+        return attrs
 
 
 class RecipeSerializer(serializers.ModelSerializer):
@@ -168,25 +183,35 @@ class RecipeSerializer(serializers.ModelSerializer):
             )
         ]
 
-    def validate_cooking_time(self, value: int):
-        if value < 1:
+    def validate(self, attrs):
+        cooking_time = attrs.get('cooking_time')
+        if self.context.get('request').method != 'PATCH':
+            if cooking_time is None or cooking_time < 1:
+                raise serializers.ValidationError(
+                    'Cooking time value is not valid.'
+                )
+            return attrs
+        if cooking_time is None:
+            return attrs
+        if cooking_time < 1:
             raise serializers.ValidationError(
-                "Cooking time value must be greater than zero."
+                'Amount value must be greate than zero.'
             )
+        return attrs
 
     def create(self, validated_data):
         ingredient_set = validated_data.pop('ingredientrecipe_set')
         tags = validated_data.pop('tags')
         recipe = Recipe.objects.create(**validated_data)
         for ingredient in ingredient_set:
-            current_ingredient_pk = ingredient['ingredient']['pk']
+            current_ingredient_pk = ingredient.get('ingredient').get('pk')
             current_ingredient = Ingredient.objects.get(
                 pk=current_ingredient_pk
             )
             IngredientRecipe.objects.create(
                 recipe=recipe,
                 ingredient=current_ingredient,
-                amount=ingredient['amount']
+                amount=ingredient.get('amount')
             )
         for tag in tags:
             TagRecipe.objects.create(
@@ -196,23 +221,30 @@ class RecipeSerializer(serializers.ModelSerializer):
         return recipe
 
     def update(self, instance: Recipe, validated_data):
-        ingredients_set = validated_data['ingredientrecipe_set']
-        data_ingredients = [
-            [get_object_or_404(Ingredient, pk=i['ingredient']['pk']),
-             i['amount']]
-            for i in ingredients_set]
-        instance.name = validated_data['name']
-        instance.image = validated_data['image']
-        instance.text = validated_data['text']
-        instance.cooking_time = self.initial_data['cooking_time']
-        IngredientRecipe.objects.filter(recipe=instance).delete()
-        TagRecipe.objects.filter(recipe=instance).delete()
-        for i in data_ingredients:
-            IngredientRecipe.objects.create(
-                recipe=instance, ingredient=i[0], amount=i[1]
-            )
-        for i in validated_data['tags']:
-            TagRecipe.objects.create(recipe=instance, tag=i)
+        instance.name = validated_data.get('name', instance.name)
+        instance.image = validated_data.get('image', instance.image)
+        instance.text = validated_data.get('text', instance.text)
+        instance.cooking_time = validated_data.get('cooking_time',
+                                                   instance.cooking_time)
+        ingredients_set = validated_data.get('ingredientrecipe_set')
+        if ingredients_set and ingredients_set[0].get('ingredient'):
+            data_ingredients = [
+                [get_object_or_404(
+                    Ingredient, pk=ingredient.get('ingredient').get('pk')
+                ),
+                 ingredient.get('amount')] for ingredient in ingredients_set
+            ]
+            IngredientRecipe.objects.filter(recipe=instance).delete()
+            for ingredient in data_ingredients:
+                IngredientRecipe.objects.create(
+                    recipe=instance,
+                    ingredient=ingredient[0],
+                    amount=ingredient[1]
+                )
+        if validated_data.get('tags'):
+            TagRecipe.objects.filter(recipe=instance).delete()
+            for tag in validated_data['tags']:
+                TagRecipe.objects.create(recipe=instance, tag=tag)
         instance.save()
         return instance
 
