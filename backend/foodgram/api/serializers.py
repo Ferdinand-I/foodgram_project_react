@@ -91,21 +91,15 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
     def get_is_subscribed(self, obj):
-        if self.context:
-            user = self.context['request'].user
-            return user in obj.subscribers.all()
-        return
-
-    def create(self, validated_data):
-        user = User.objects.create_user(**validated_data)
-        return user
+        user = self.context['request'].user
+        return user in obj.subscribers.all()
 
 
 class IngredientRecipeSerializer(serializers.ModelSerializer):
 
     id = serializers.IntegerField(
         source='ingredient.pk',
-        write_only=True
+        write_only=True,
     )
     name = serializers.CharField(source='ingredient', read_only=True)
     measurement_unit = serializers.CharField(
@@ -122,7 +116,8 @@ class IngredientRecipeSerializer(serializers.ModelSerializer):
             'amount'
         ]
         extra_kwargs = {
-            'amount': {'required': True}
+            'amount': {'required': True},
+            'id': {'required': True}
         }
 
     def validate(self, attrs):
@@ -195,7 +190,7 @@ class RecipeSerializer(serializers.ModelSerializer):
             return attrs
         if cooking_time < 1:
             raise serializers.ValidationError(
-                'Amount value must be greate than zero.'
+                'Cooking time value must be greate than zero.'
             )
         return attrs
 
@@ -221,19 +216,16 @@ class RecipeSerializer(serializers.ModelSerializer):
         return recipe
 
     def update(self, instance: Recipe, validated_data):
-        instance.name = validated_data.get('name', instance.name)
-        instance.image = validated_data.get('image', instance.image)
-        instance.text = validated_data.get('text', instance.text)
-        instance.cooking_time = validated_data.get('cooking_time',
-                                                   instance.cooking_time)
-        ingredients_set = validated_data.get('ingredientrecipe_set')
-        if ingredients_set and ingredients_set[0].get('ingredient'):
-            data_ingredients = [
-                [get_object_or_404(
-                    Ingredient, pk=ingredient.get('ingredient').get('pk')
-                ),
-                 ingredient.get('amount')] for ingredient in ingredients_set
-            ]
+        ingredients_set = validated_data.pop('ingredientrecipe_set', [])
+        super(RecipeSerializer, self).update(instance, validated_data)
+        data_ingredients = list()
+        for index in range(len(ingredients_set)):
+            ingredient = ingredients_set[index]
+            if ingredient and ingredient.get('ingredient'):
+                data_ingredients.append([get_object_or_404(
+                        Ingredient, pk=ingredient.get('ingredient').get('pk')
+                    ), ingredients_set[index].get('amount')])
+        if data_ingredients:
             IngredientRecipe.objects.filter(recipe=instance).delete()
             for ingredient in data_ingredients:
                 IngredientRecipe.objects.create(
@@ -241,18 +233,13 @@ class RecipeSerializer(serializers.ModelSerializer):
                     ingredient=ingredient[0],
                     amount=ingredient[1]
                 )
-        if validated_data.get('tags'):
-            TagRecipe.objects.filter(recipe=instance).delete()
-            for tag in validated_data['tags']:
-                TagRecipe.objects.create(recipe=instance, tag=tag)
-        instance.save()
         return instance
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         new_tag_representation = list()
         for tag_id in ret['tags']:
-            tag = Tag.objects.get(pk=tag_id)
+            tag = get_object_or_404(Tag, pk=tag_id)
             serialized_data = TagSerializer(tag)
             new_tag_representation.append(serialized_data.data)
         ret['tags'] = new_tag_representation

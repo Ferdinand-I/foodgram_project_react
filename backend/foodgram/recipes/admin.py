@@ -15,7 +15,7 @@ class RecipeAdmin(admin.ModelAdmin):
 
 @admin.register(Ingredient)
 class IngredientAdmin(admin.ModelAdmin):
-    list_display = ['name', 'measure']
+    list_display = ['id', 'name', 'measure']
     search_fields = ['name', 'measure']
     list_filter = ['name', ]
 

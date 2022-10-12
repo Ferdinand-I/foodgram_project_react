@@ -1,11 +1,8 @@
-import io
-
 from django.contrib.auth.hashers import check_password
 from django.db.models import Sum
-from django.http import FileResponse
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from reportlab.pdfgen import canvas
 from rest_framework import filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
@@ -17,18 +14,17 @@ from rest_framework.viewsets import ModelViewSet
 from recipes.models import Recipe, Ingredient, Tag
 from users.models import User
 from .filters import RecipeFilter
-from .permissions import CustomRecipePermissions, CustomUserPermissions
+from .permissions import CustomRecipePermissions
 from .serializers import (RecipeSerializer, IngredientSerializer,
                           TagSerializer, UserSerializer,
                           SubscriptionSerializer,
                           RecipeSmallReadOnlySerialiazer)
-from django.http import HttpResponse
 
 
 class UserViewSet(ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAdminUser, CustomUserPermissions, ]
+    permission_classes = []
 
     def get_current_user(self) -> User:
         return self.request.user
@@ -36,23 +32,27 @@ class UserViewSet(ModelViewSet):
     @action(
         detail=False,
         methods=['get', ],
+        permission_classes=[IsAuthenticated]
     )
     def me(self, *args, **kwargs):
         current_user = self.request.user
-        data = UserSerializer(current_user).data
-        data['is_subscribed'] = False
+        data = UserSerializer(
+            current_user,
+            context={'request': self.request}
+        ).data
         return Response(
             data
         )
 
     @action(
         detail=False,
-        methods=['post', ]
+        methods=['post', ],
+        permission_classes=[IsAuthenticated]
     )
     def set_password(self, request, *args, **kwargs):
         if (request.data.get('new_password') and
                 request.data.get('current_password')):
-            current_user = self.get_current_user()
+            current_user = self.request.user
             current_pass = current_user.password
             if check_password(
                     request.data.get('current_password'), current_pass
@@ -74,17 +74,17 @@ class UserViewSet(ModelViewSet):
 
     @action(
         methods=['post', 'delete', ],
-        detail=True
+        detail=True,
+        permission_classes=[IsAuthenticated]
     )
     def subscribe(self, *args, **kwargs):
-        current_user = self.get_current_user()
+        current_user = self.request.user
         obj = get_object_or_404(User, pk=self.kwargs.get('pk'))
         if self.request.method == 'POST':
             if current_user != obj:
                 if current_user not in obj.subscribers.all():
                     obj.subscribers.add(current_user)
                     data = SubscriptionSerializer(obj).data
-                    data['is_subscribed'] = True
                     return Response(
                         data=data,
                         status=HTTP_201_CREATED
@@ -119,10 +119,10 @@ class UserViewSet(ModelViewSet):
     @action(
         methods=['get', ],
         detail=False,
-        permission_classes=[IsAuthenticated, ]
+        permission_classes=[IsAuthenticated]
     )
     def subscriptions(self, *args, **kwargs):
-        user_subscriptions = self.get_current_user().subscriptions.all()
+        user_subscriptions = self.request.user.subscriptions.all()
         return Response(
             data=[SubscriptionSerializer(subscription).data
                   for subscription in user_subscriptions]
@@ -132,32 +132,28 @@ class UserViewSet(ModelViewSet):
 class RecipeViewSet(ModelViewSet):
     queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
-    permission_classes = [IsAdminUser, CustomRecipePermissions, ]
+    permission_classes = [CustomRecipePermissions]
     filter_backends = [DjangoFilterBackend, ]
     filterset_class = RecipeFilter
     http_method_names = ['get', 'post', 'patch', 'delete', ]
 
     def perform_create(self, serializer):
-        cooking_time = serializer.initial_data['cooking_time']
         serializer.is_valid(raise_exception=True)
         serializer.save(
             author=self.request.user,
-            cooking_time=cooking_time
         )
 
     def get_recipe(self):
         return get_object_or_404(Recipe, pk=self.kwargs.get('pk'))
 
-    def get_current_user(self):
-        return self.request.user
-
     @action(
         detail=True,
         methods=['post', 'delete'],
+        permission_classes=[IsAuthenticated]
     )
     def shopping_cart(self, *args, **kwargs):
         recipe = self.get_recipe()
-        user = self.get_current_user()
+        user = self.request.user
         if self.request.method == 'POST':
             if user not in recipe.shopping_users.all():
                 recipe.shopping_users.add(user)
@@ -184,7 +180,8 @@ class RecipeViewSet(ModelViewSet):
 
     @action(
         detail=False,
-        methods=['get', ]
+        methods=['get', ],
+        permission_classes=[IsAuthenticated]
     )
     def download_shopping_cart(self, *args, **kwargs):
         queryset = (Recipe.objects.filter(
@@ -210,11 +207,12 @@ class RecipeViewSet(ModelViewSet):
 
     @action(
         detail=True,
-        methods=['post', 'delete', ]
+        methods=['post', 'delete', ],
+        permission_classes=[IsAuthenticated]
     )
     def favorite(self, *args, **kwargs):
         recipe = self.get_recipe()
-        user = self.get_current_user()
+        user = self.request.user
         if self.request.method == 'POST':
             if user not in recipe.favorited_users.all():
                 recipe.favorited_users.add(user)

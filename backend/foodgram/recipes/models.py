@@ -1,5 +1,5 @@
 from django.db import models
-
+from django.core.validators import MinValueValidator
 from users.models import User
 
 
@@ -7,7 +7,8 @@ class Ingredient(models.Model):
     """Class that represents Ingredients model."""
     name = models.CharField(
         max_length=100,
-        verbose_name='Название'
+        verbose_name='Название',
+        db_index=True
     )
     measure = models.CharField(
         max_length=15,
@@ -27,7 +28,7 @@ class Tag(models.Model):
     name = models.CharField(
         max_length=50,
         verbose_name='Тэг',
-        unique=True
+        unique=True,
     )
     color = models.CharField(
         max_length=16,
@@ -35,7 +36,7 @@ class Tag(models.Model):
         unique=True
     )
     slug = models.SlugField(
-        unique=True
+        unique=True,
     )
 
     class Meta:
@@ -56,7 +57,8 @@ class Recipe(models.Model):
     )
     name = models.CharField(
         max_length=200,
-        verbose_name='Название'
+        verbose_name='Название',
+        db_index=True
     )
     image = models.ImageField(
         upload_to='recipes/images/',
@@ -74,9 +76,13 @@ class Recipe(models.Model):
         Tag,
         through='TagRecipe',
         verbose_name='Тэги',
+        db_index=True
     )
     cooking_time = models.PositiveSmallIntegerField(
-        verbose_name='Время приготовления'
+        verbose_name='Время приготовления',
+        validators=[
+            MinValueValidator(1, 'Cooking time cannot be less than "1".')
+        ]
     )
     created = models.DateTimeField(
         verbose_name='Дата и время создания',
@@ -118,7 +124,9 @@ class IngredientRecipe(models.Model):
     recipe = models.ForeignKey(
         Recipe,
         on_delete=models.CASCADE)
-    amount = models.IntegerField()
+    amount = models.IntegerField(
+        validators=[MinValueValidator(1, 'Amount cannot be less than "1".')]
+    )
 
     class Meta:
         verbose_name = 'Ингредиент в рецепте'
