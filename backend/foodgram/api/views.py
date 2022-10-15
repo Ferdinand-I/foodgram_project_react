@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.status import (HTTP_400_BAD_REQUEST, HTTP_204_NO_CONTENT,
                                    HTTP_201_CREATED)
@@ -19,15 +19,13 @@ from .serializers import (RecipeSerializer, IngredientSerializer,
                           TagSerializer, UserSerializer,
                           SubscriptionSerializer,
                           RecipeSmallReadOnlySerialiazer)
+from rest_framework.pagination import LimitOffsetPagination
 
 
 class UserViewSet(ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = []
-
-    def get_current_user(self) -> User:
-        return self.request.user
 
     @action(
         detail=False,
@@ -84,7 +82,9 @@ class UserViewSet(ModelViewSet):
             if current_user != obj:
                 if current_user not in obj.subscribers.all():
                     obj.subscribers.add(current_user)
-                    data = SubscriptionSerializer(obj).data
+                    data = SubscriptionSerializer(
+                        obj,
+                        context={'request': self.request}).data
                     return Response(
                         data=data,
                         status=HTTP_201_CREATED
@@ -123,10 +123,13 @@ class UserViewSet(ModelViewSet):
     )
     def subscriptions(self, *args, **kwargs):
         user_subscriptions = self.request.user.subscriptions.all()
-        return Response(
-            data=[SubscriptionSerializer(subscription).data
-                  for subscription in user_subscriptions]
-        )
+        queryset = self.paginate_queryset([
+                SubscriptionSerializer(
+                    subscription,
+                    context={'request': self.request}).data
+                for subscription in user_subscriptions
+            ])
+        return self.get_paginated_response(queryset)
 
 
 class RecipeViewSet(ModelViewSet):
@@ -244,9 +247,11 @@ class IngredientViewSet(ModelViewSet):
     filter_backends = [filters.SearchFilter, ]
     search_fields = ['^name', ]
     http_method_names = ['get', ]
+    pagination_class = None
 
 
 class TagViewSet(ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     http_method_names = ['get', ]
+    pagination_class = None

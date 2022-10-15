@@ -1,8 +1,10 @@
-from rest_framework import serializers
 from django.shortcuts import get_object_or_404
+from rest_framework import serializers
+
 from core.fields import Base64ImageField
 from recipes.models import Ingredient, IngredientRecipe, Recipe, Tag, TagRecipe
 from users.models import User
+from django.core.paginator import Paginator
 
 
 class RecipeSmallReadOnlySerialiazer(serializers.ModelSerializer):
@@ -24,7 +26,7 @@ class RecipeSmallReadOnlySerialiazer(serializers.ModelSerializer):
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
-    recipes = RecipeSmallReadOnlySerialiazer(many=True)
+    recipes = serializers.SerializerMethodField('paginated_recipes')
     recipes_count = serializers.SerializerMethodField()
     is_subscribed = serializers.BooleanField(default=True)
 
@@ -42,7 +44,15 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         ]
 
     def get_recipes_count(self, obj: User):
-        return len(obj.recipes.all())
+        return obj.recipes.count()
+
+    def paginated_recipes(self, obj):
+        limit = self.context['request'].query_params.get('recipes_limit')
+        page_size = limit or 6
+        paginator = Paginator(obj.recipes.all(), page_size)
+        recipes = paginator.page(1)
+        serializer = RecipeSmallReadOnlySerialiazer(recipes, many=True)
+        return serializer.data
 
 
 class TagSerializer(serializers.ModelSerializer):
