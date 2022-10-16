@@ -5,6 +5,7 @@ from core.fields import Base64ImageField
 from recipes.models import Ingredient, IngredientRecipe, Recipe, Tag, TagRecipe
 from users.models import User
 from django.core.paginator import Paginator
+from django.contrib.auth.models import AnonymousUser
 
 
 class RecipeSmallReadOnlySerialiazer(serializers.ModelSerializer):
@@ -100,9 +101,15 @@ class UserSerializer(serializers.ModelSerializer):
             'password': {'write_only': True},
         }
 
-    def get_is_subscribed(self, obj):
+    def create(self, validated_data):
+        user = User.objects.create_user(**validated_data)
+        return user
+
+    def get_is_subscribed(self, obj: User) -> bool:
         user = self.context['request'].user
-        return user in obj.subscribers.all()
+        if isinstance(user, AnonymousUser):
+            return False
+        return User.objects.filter(pk=user.pk, subscriptions=obj).exists()
 
 
 class IngredientRecipeSerializer(serializers.ModelSerializer):

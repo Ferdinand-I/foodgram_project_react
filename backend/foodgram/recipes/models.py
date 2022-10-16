@@ -16,11 +16,12 @@ class Ingredient(models.Model):
     )
 
     class Meta:
+        ordering = ['name']
         verbose_name = 'Ингредиент'
         verbose_name_plural = 'Ингредиенты'
 
     def __str__(self):
-        return self.name
+        return f'{self.name} {self.measure}'
 
 
 class Tag(models.Model):
@@ -40,6 +41,7 @@ class Tag(models.Model):
     )
 
     class Meta:
+        ordering = ['color']
         verbose_name = 'Тэг'
         verbose_name_plural = 'Тэги'
 
@@ -62,7 +64,7 @@ class Recipe(models.Model):
     )
     image = models.ImageField(
         upload_to='recipes/images/',
-        verbose_name='Картинка'
+        verbose_name='Картинка',
     )
     text = models.TextField(
         verbose_name='Описание'
@@ -99,6 +101,7 @@ class Recipe(models.Model):
     )
 
     class Meta:
+        ordering = ['-created']
         verbose_name = 'Рецепт'
         verbose_name_plural = 'Рецепты'
         constraints = [

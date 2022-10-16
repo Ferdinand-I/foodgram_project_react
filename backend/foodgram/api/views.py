@@ -3,7 +3,6 @@ from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,13 +12,12 @@ from rest_framework.viewsets import ModelViewSet
 
 from recipes.models import Recipe, Ingredient, Tag
 from users.models import User
-from .filters import RecipeFilter
+from .filters import RecipeFilter, IngredientFilter
 from .permissions import CustomRecipePermissions
 from .serializers import (RecipeSerializer, IngredientSerializer,
                           TagSerializer, UserSerializer,
                           SubscriptionSerializer,
                           RecipeSmallReadOnlySerialiazer)
-from rest_framework.pagination import LimitOffsetPagination
 
 
 class UserViewSet(ModelViewSet):
@@ -140,6 +138,13 @@ class RecipeViewSet(ModelViewSet):
     filterset_class = RecipeFilter
     http_method_names = ['get', 'post', 'patch', 'delete', ]
 
+    def get_queryset(self):
+        if self.request.query_params.get('is_favorited'):
+            return self.request.user.favorited.all()
+        if self.request.query_params.get('is_in_shopping_cart'):
+            return self.request.user.recipe_set.all()
+        return super().get_queryset()
+
     def perform_create(self, serializer):
         serializer.is_valid(raise_exception=True)
         serializer.save(
@@ -187,6 +192,7 @@ class RecipeViewSet(ModelViewSet):
         permission_classes=[IsAuthenticated]
     )
     def download_shopping_cart(self, *args, **kwargs):
+        Recipe._meta.ordering = []
         queryset = (Recipe.objects.filter(
             shopping_users=self.request.user).values(
             'ingredients__measure', 'ingredients__name').annotate(
@@ -206,6 +212,7 @@ class RecipeViewSet(ModelViewSet):
             for ingredient in queryset
         ])
         response.write(data)
+        Recipe._meta.ordering = ['-name']
         return response
 
     @action(
@@ -244,8 +251,8 @@ class RecipeViewSet(ModelViewSet):
 class IngredientViewSet(ModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    filter_backends = [filters.SearchFilter, ]
-    search_fields = ['^name', ]
+    filter_backends = [DjangoFilterBackend, ]
+    filterset_class = IngredientFilter
     http_method_names = ['get', ]
     pagination_class = None
 

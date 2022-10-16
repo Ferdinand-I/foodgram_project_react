@@ -1,9 +1,9 @@
 import csv
 
-from django.core.management.base import BaseCommand
-from recipes.models import Ingredient
 from django.conf import settings
+from django.core.management.base import BaseCommand
 
+from recipes.models import Ingredient
 
 CSV_ROOT = settings.BASE_DIR / 'data'
 
