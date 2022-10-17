@@ -101,6 +101,9 @@ class Recipe(models.Model):
     )
 
     class Meta:
+        # Ordering meta param also redefines while
+        # one of view functions' method works. If redefine here check
+        # api/views.py RecipeViewSet method 'download_shopping_cart'.
         ordering = ['-created']
         verbose_name = 'Рецепт'
         verbose_name_plural = 'Рецепты'

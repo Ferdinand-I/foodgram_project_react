@@ -212,7 +212,7 @@ class RecipeViewSet(ModelViewSet):
             for ingredient in queryset
         ])
         response.write(data)
-        Recipe._meta.ordering = ['-name']
+        Recipe._meta.ordering = ['-created']
         return response
 
     @action(
