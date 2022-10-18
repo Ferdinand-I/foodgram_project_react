@@ -1,11 +1,12 @@
+from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 
 from core.fields import Base64ImageField
 from recipes.models import Ingredient, IngredientRecipe, Recipe, Tag, TagRecipe
 from users.models import User
-from django.core.paginator import Paginator
-from django.contrib.auth.models import AnonymousUser
 
 
 class RecipeSmallReadOnlySerialiazer(serializers.ModelSerializer):
@@ -48,8 +49,9 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         return obj.recipes.count()
 
     def paginated_recipes(self, obj):
+        default_page_size = settings.REST_FRAMEWORK.get('PAGE_SIZE', 6)
         limit = self.context['request'].query_params.get('recipes_limit')
-        page_size = limit or 6
+        page_size = limit or default_page_size
         paginator = Paginator(obj.recipes.all(), page_size)
         recipes = paginator.page(1)
         serializer = RecipeSmallReadOnlySerialiazer(recipes, many=True)
@@ -137,18 +139,6 @@ class IngredientRecipeSerializer(serializers.ModelSerializer):
             'id': {'required': True}
         }
 
-    def validate(self, attrs):
-        amount = attrs.get('amount')
-        if not amount:
-            raise serializers.ValidationError(
-                'Amount value must be define.'
-            )
-        if amount < 1:
-            raise serializers.ValidationError(
-                'Amount value must be greate than zero.'
-            )
-        return attrs
-
 
 class RecipeSerializer(serializers.ModelSerializer):
     tags = serializers.PrimaryKeyRelatedField(
@@ -170,7 +160,8 @@ class RecipeSerializer(serializers.ModelSerializer):
     image = Base64ImageField()
     ingredients = IngredientRecipeSerializer(
         source='ingredientrecipe_set',
-        many=True
+        many=True,
+        required=True
     )
 
     class Meta:
@@ -194,6 +185,15 @@ class RecipeSerializer(serializers.ModelSerializer):
                 fields=('author', 'name')
             )
         ]
+
+    def validate_ingredients(self, values):
+        for value in values:
+            pk = value.get('ingredient').get('pk')
+            if not Ingredient.objects.filter(pk=pk).exists():
+                raise serializers.ValidationError(
+                    f'Theres no ingredient with id {pk}.'
+                )
+        return values
 
     def validate(self, attrs):
         cooking_time = attrs.get('cooking_time')

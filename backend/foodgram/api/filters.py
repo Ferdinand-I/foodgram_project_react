@@ -12,7 +12,7 @@ class RecipeFilter(filters.FilterSet):
         field_name='tags__slug',
         to_field_name='slug',
         queryset=Tag.objects.all(),
-        conjoined=True
+        method='filter_tags'
     )
 
     class Meta:
@@ -21,6 +21,19 @@ class RecipeFilter(filters.FilterSet):
             'author',
             'tags'
         )
+
+    def filter_tags(self, queryset, name, value):
+        if not value:
+            return queryset
+        exclude_tags = Tag.objects.exclude(
+            slug__in=[tag.slug for tag in value]
+        )
+        queryset = queryset.filter(
+            tags__in=value
+        ).exclude(
+            tags__in=exclude_tags
+        ).distinct()
+        return queryset
 
 
 class IngredientFilter(filters.FilterSet):
