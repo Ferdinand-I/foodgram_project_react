@@ -37,12 +37,12 @@ http://158.160.6.0/
 Данные суперпользователя:
 
     email: ferdinand@yandex.ru
-    password franz12345
+    password: franz12345
     
 Данные пользователя без прав администратора:
 
     email: mary@poppins.ru
-    password mary1234
+    password: mary1234
 
 Админка доступна по адресу:
 
