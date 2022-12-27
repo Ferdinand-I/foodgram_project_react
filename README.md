@@ -1,4 +1,4 @@
-# Практикум. Диплом. Сервис Foodgram <img style="margin-left: 10px;" src="https://admprogress.ru/upload/iblock/dcc/Kartinka-obshchepit.jpg" width=64>
+# Сервис Foodgram <img style="margin-left: 10px;" src="https://admprogress.ru/upload/iblock/dcc/Kartinka-obshchepit.jpg" width=64>
 
 Проект **Foodgram** - это сервис для создания и публикации рецептов, который реализован с использованием следующих технологий:
 * **Django + Django REST Framework**
